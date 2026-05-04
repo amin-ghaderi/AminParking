@@ -1,0 +1,23 @@
+R_DEF: Internal format may change without notice
+local
+drawable ic_launcher
+id buttonStart
+id buttonStop
+id editPhone
+id editText1
+id editText2
+layout activity_main
+string app_name
+string button_start
+string button_stop
+string hint_message_start
+string hint_message_stop
+string hint_phone
+string label_message_start
+string label_message_stop
+string label_phone
+string toast_need_phone
+string toast_sms_denied
+string toast_started
+string toast_stopped
+style Theme.AminParking
