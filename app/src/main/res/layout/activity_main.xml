@@ -58,6 +58,30 @@
             android:minLines="2"
             android:importantForAutofill="no" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Interval (minutes)"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+        <EditText
+            android:id="@+id/editInterval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="55"
+            android:inputType="number"
+            android:importantForAutofill="no" />
+
+        <TextView
+            android:id="@+id/textStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Stopped"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
         <Button
             android:id="@+id/buttonStart"
             android:layout_width="match_parent"

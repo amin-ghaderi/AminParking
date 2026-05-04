@@ -1,12 +1,13 @@
 package com.amin.parking
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -17,6 +18,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var editPhone: EditText
     private lateinit var editText1: EditText
     private lateinit var editText2: EditText
+    private lateinit var editInterval: EditText
+    private lateinit var textStatus: TextView
+    private lateinit var buttonStart: Button
+    private lateinit var buttonStop: Button
 
     private val requestSmsPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -36,10 +41,14 @@ class MainActivity : AppCompatActivity() {
         editPhone = findViewById(R.id.editPhone)
         editText1 = findViewById(R.id.editText1)
         editText2 = findViewById(R.id.editText2)
+        editInterval = findViewById(R.id.editInterval)
+        textStatus = findViewById(R.id.textStatus)
+        buttonStart = findViewById(R.id.buttonStart)
+        buttonStop = findViewById(R.id.buttonStop)
 
         loadFieldsFromPrefs()
 
-        findViewById<Button>(R.id.buttonStart).setOnClickListener {
+        buttonStart.setOnClickListener {
             if (hasSendSmsPermission()) {
                 startParkingLoop()
             } else {
@@ -47,16 +56,30 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        findViewById<Button>(R.id.buttonStop).setOnClickListener {
+        buttonStop.setOnClickListener {
             stopParkingLoop()
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        updateStatusFromPrefs()
+    }
+
     private fun loadFieldsFromPrefs() {
-        val prefs = getSharedPreferences(ParkingWorker.PREF_NAME, MODE_PRIVATE)
-        editPhone.setText(prefs.getString(ParkingWorker.KEY_PHONE, ""))
-        editText1.setText(prefs.getString(ParkingWorker.KEY_TEXT1, ""))
-        editText2.setText(prefs.getString(ParkingWorker.KEY_TEXT2, ""))
+        val prefs = getSharedPreferences(ParkingService.PREF_NAME, MODE_PRIVATE)
+        editPhone.setText(prefs.getString(ParkingService.KEY_PHONE, ""))
+        editText1.setText(prefs.getString(ParkingService.KEY_TEXT1, ""))
+        editText2.setText(prefs.getString(ParkingService.KEY_TEXT2, ""))
+        editInterval.setText(prefs.getInt(ParkingService.KEY_INTERVAL_MINUTES, 55).toString())
+    }
+
+    private fun updateStatusFromPrefs() {
+        val running = getSharedPreferences(ParkingService.PREF_NAME, MODE_PRIVATE)
+            .getBoolean(ParkingService.KEY_RUNNING, false)
+        textStatus.text = if (running) "🟢 Parking Active" else "🔴 Stopped"
+        buttonStart.isEnabled = !running
+        buttonStop.isEnabled = running
     }
 
     private fun hasSendSmsPermission(): Boolean {
@@ -70,33 +93,40 @@ class MainActivity : AppCompatActivity() {
         val phone = editPhone.text.toString().trim()
         val text1 = editText1.text.toString()
         val text2 = editText2.text.toString()
+        val intervalMinutes = editInterval.text.toString().toIntOrNull()?.coerceAtLeast(1) ?: 55
 
         if (phone.isEmpty()) {
             Toast.makeText(this, R.string.toast_need_phone, Toast.LENGTH_SHORT).show()
             return
         }
 
-        getSharedPreferences(ParkingWorker.PREF_NAME, MODE_PRIVATE)
+        getSharedPreferences(ParkingService.PREF_NAME, MODE_PRIVATE)
             .edit()
-            .putString(ParkingWorker.KEY_PHONE, phone)
-            .putString(ParkingWorker.KEY_TEXT1, text1)
-            .putString(ParkingWorker.KEY_TEXT2, text2)
-            .putBoolean(ParkingWorker.KEY_RUNNING, true)
-            .putBoolean(ParkingWorker.KEY_SEND_TEXT1_NEXT, true)
+            .putString(ParkingService.KEY_PHONE, phone)
+            .putString(ParkingService.KEY_TEXT1, text1)
+            .putString(ParkingService.KEY_TEXT2, text2)
+            .putInt(ParkingService.KEY_INTERVAL_MINUTES, intervalMinutes)
+            .putBoolean(ParkingService.KEY_RUNNING, true)
+            .putBoolean(ParkingService.KEY_IS_PARKING_ACTIVE, false)
             .apply()
 
-        ParkingWorker.enqueueFirst(this)
+        val serviceIntent = Intent(this, ParkingService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
+        textStatus.text = "🟢 Parking Active"
+        buttonStart.isEnabled = false
+        buttonStop.isEnabled = true
         Toast.makeText(this, R.string.toast_started, Toast.LENGTH_SHORT).show()
         Log.d(TAG, "Parking loop started for $phone")
     }
 
     private fun stopParkingLoop() {
-        getSharedPreferences(ParkingWorker.PREF_NAME, MODE_PRIVATE)
-            .edit()
-            .putBoolean(ParkingWorker.KEY_RUNNING, false)
-            .apply()
-
-        ParkingWorker.cancelAll(this)
+        val stopIntent = Intent(this, ParkingService::class.java).apply {
+            action = ParkingService.ACTION_STOP
+        }
+        ContextCompat.startForegroundService(this, stopIntent)
+        textStatus.text = "🔴 Stopped"
+        buttonStart.isEnabled = true
+        buttonStop.isEnabled = false
         Toast.makeText(this, R.string.toast_stopped, Toast.LENGTH_SHORT).show()
         Log.d(TAG, "Parking loop stopped")
     }
