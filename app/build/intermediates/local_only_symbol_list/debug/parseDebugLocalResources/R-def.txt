@@ -1,11 +1,15 @@
 R_DEF: Internal format may change without notice
 local
 drawable ic_launcher
+drawable ic_launcher_foreground
 id buttonStart
 id buttonStop
+id editInterval
 id editPhone
 id editText1
 id editText2
+id textCountdown
+id textStatus
 layout activity_main
 string app_name
 string button_start

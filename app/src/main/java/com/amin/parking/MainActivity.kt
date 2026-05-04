@@ -3,7 +3,10 @@ package com.amin.parking
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Button
 import android.widget.EditText
@@ -20,8 +23,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var editText2: EditText
     private lateinit var editInterval: EditText
     private lateinit var textStatus: TextView
+    private lateinit var textCountdown: TextView
     private lateinit var buttonStart: Button
     private lateinit var buttonStop: Button
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val countdownRunnable = object : Runnable {
+        override fun run() {
+            updateCountdownUI()
+            handler.postDelayed(this, 1000)
+        }
+    }
 
     private val requestSmsPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -43,6 +55,7 @@ class MainActivity : AppCompatActivity() {
         editText2 = findViewById(R.id.editText2)
         editInterval = findViewById(R.id.editInterval)
         textStatus = findViewById(R.id.textStatus)
+        textCountdown = findViewById(R.id.textCountdown)
         buttonStart = findViewById(R.id.buttonStart)
         buttonStop = findViewById(R.id.buttonStop)
 
@@ -64,6 +77,31 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateStatusFromPrefs()
+        handler.post(countdownRunnable)
+    }
+
+    override fun onPause() {
+        handler.removeCallbacks(countdownRunnable)
+        super.onPause()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_POST_NOTIFICATIONS) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startParkingLoop()
+            } else {
+                Toast.makeText(
+                    this,
+                    "Notification permission needed to show parking status",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
     }
 
     private fun loadFieldsFromPrefs() {
@@ -82,6 +120,28 @@ class MainActivity : AppCompatActivity() {
         buttonStop.isEnabled = running
     }
 
+    private fun updateCountdownUI() {
+        val prefs = getSharedPreferences(ParkingService.PREF_NAME, MODE_PRIVATE)
+        val running = prefs.getBoolean(ParkingService.KEY_RUNNING, false)
+        val nextTime = prefs.getLong(ParkingService.KEY_NEXT_TRIGGER_TIME, 0L)
+
+        if (!running || nextTime == 0L) {
+            textCountdown.text = "--:--"
+            return
+        }
+
+        val remaining = nextTime - System.currentTimeMillis()
+
+        if (remaining <= 0) {
+            textCountdown.text = "00:00"
+        } else {
+            val totalSeconds = remaining / 1000
+            val minutes = totalSeconds / 60
+            val seconds = totalSeconds % 60
+            textCountdown.text = "%02d:%02d".format(minutes, seconds)
+        }
+    }
+
     private fun hasSendSmsPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             this,
@@ -98,6 +158,18 @@ class MainActivity : AppCompatActivity() {
         if (phone.isEmpty()) {
             Toast.makeText(this, R.string.toast_need_phone, Toast.LENGTH_SHORT).show()
             return
+        }
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                    REQUEST_POST_NOTIFICATIONS,
+                )
+                return
+            }
         }
 
         getSharedPreferences(ParkingService.PREF_NAME, MODE_PRIVATE)
@@ -133,5 +205,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "AminParking"
+        private const val REQUEST_POST_NOTIFICATIONS = 1001
     }
 }

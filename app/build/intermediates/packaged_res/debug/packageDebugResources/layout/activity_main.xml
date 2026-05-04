@@ -2,61 +2,74 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:padding="16dp">
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="20dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/label_phone"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="24dp" />
 
         <EditText
             android:id="@+id/editPhone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/hint_phone"
-            android:inputType="phone"
-            android:importantForAutofill="no" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/label_message_start"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
+            android:hint="Phone number"
+            android:importantForAutofill="no"
+            android:inputType="phone" />
 
         <EditText
             android:id="@+id/editText1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="top|start"
-            android:hint="@string/hint_message_start"
-            android:inputType="textMultiLine"
-            android:minLines="2"
-            android:importantForAutofill="no" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="@string/label_message_stop"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
+            android:gravity="top|start"
+            android:hint="Start SMS"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine"
+            android:minLines="2" />
 
         <EditText
             android:id="@+id/editText2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             android:gravity="top|start"
-            android:hint="@string/hint_message_stop"
+            android:hint="Stop SMS"
+            android:importantForAutofill="no"
             android:inputType="textMultiLine"
-            android:minLines="2"
-            android:importantForAutofill="no" />
+            android:minLines="2" />
+
+        <EditText
+            android:id="@+id/editInterval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="Interval (minutes)"
+            android:importantForAutofill="no"
+            android:inputType="number" />
+
+        <TextView
+            android:id="@+id/textStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Stopped"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textCountdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="--:--"
+            android:textSize="20sp" />
 
         <Button
             android:id="@+id/buttonStart"
@@ -69,7 +82,8 @@
             android:id="@+id/buttonStop"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="24dp"
             android:text="@string/button_stop" />
     </LinearLayout>
 </ScrollView>

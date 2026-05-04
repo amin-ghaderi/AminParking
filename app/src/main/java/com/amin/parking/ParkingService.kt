@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -29,9 +30,17 @@ class ParkingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        acquireWakeLock()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Parking Active"))
+        val notification = buildNotification("Parking Active")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -80,23 +89,55 @@ class ParkingService : Service() {
                 return
             }
 
-            sendSms(phone, text1)
-            prefs.edit().putBoolean(KEY_IS_PARKING_ACTIVE, true).apply()
-            updateNotification("Waiting ${intervalMinutes} min")
-            delay(intervalMinutes * 60L * 1000L)
-            if (!serviceScope.isActive) return
+            acquireWakeLock()
+            try {
+                sendSms(phone, text1)
+                prefs.edit().putBoolean(KEY_IS_PARKING_ACTIVE, true).apply()
+                val nextAfterText1 = System.currentTimeMillis() + intervalMinutes * 60L * 1000L
+                prefs.edit().putLong(KEY_NEXT_TRIGGER_TIME, nextAfterText1).commit()
+                countdownDelay(nextAfterText1)
+                if (!serviceScope.isActive) return
 
-            if (!prefs.getBoolean(KEY_RUNNING, false)) {
-                stopSelf()
-                return
+                if (!prefs.getBoolean(KEY_RUNNING, false)) {
+                    stopSelf()
+                    return
+                }
+
+                sendSms(phone, text2)
+                prefs.edit().putBoolean(KEY_IS_PARKING_ACTIVE, false).apply()
+                val nextAfterText2 = System.currentTimeMillis() + 60_000L
+                prefs.edit().putLong(KEY_NEXT_TRIGGER_TIME, nextAfterText2).commit()
+                countdownDelay(nextAfterText2)
+                if (!serviceScope.isActive) return
+            } finally {
+                releaseWakeLock()
+            }
+        }
+    }
+
+    private suspend fun countdownDelay(targetTime: Long) {
+        Log.d("AminParking", "Next trigger at: $targetTime")
+        var lastUpdate = 0L
+
+        while (true) {
+            val remaining = targetTime - System.currentTimeMillis()
+            if (remaining <= 0) break
+
+            val now = System.currentTimeMillis()
+            if (now - lastUpdate >= 5000) {
+                updateNotification(formatTime(remaining))
+                lastUpdate = now
             }
 
-            sendSms(phone, text2)
-            prefs.edit().putBoolean(KEY_IS_PARKING_ACTIVE, false).apply()
-            updateNotification("Waiting 1 min")
-            delay(60L * 1000L)
-            if (!serviceScope.isActive) return
+            delay(1000)
         }
+    }
+
+    private fun formatTime(ms: Long): String {
+        val totalSeconds = ms / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return "Next in %02d:%02d".format(minutes, seconds)
     }
 
     private fun handleStop() {
@@ -112,9 +153,11 @@ class ParkingService : Service() {
         prefs.edit()
             .putBoolean(KEY_IS_PARKING_ACTIVE, false)
             .putBoolean(KEY_RUNNING, false)
-            .apply()
+            .putLong(KEY_NEXT_TRIGGER_TIME, 0L)
+            .commit()
 
         loopJob?.cancel()
+        releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -149,26 +192,40 @@ class ParkingService : Service() {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
+
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AminParking")
             .setContentText(status)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
     }
 
     private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        // User must disable battery optimization for full reliability
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AminParking::WakeLock").apply {
-            setReferenceCounted(false)
-            acquire()
+        if (wakeLock == null) {
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "AminParking::WakeLock",
+            ).apply {
+                setReferenceCounted(false)
+            }
+        }
+        if (wakeLock?.isHeld != true) {
+            wakeLock?.acquire()
         }
     }
 
@@ -185,7 +242,10 @@ class ParkingService : Service() {
             CHANNEL_ID,
             "AminParking",
             NotificationManager.IMPORTANCE_LOW,
-        )
+        ).apply {
+            description = "Parking service"
+            setShowBadge(false)
+        }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
     }
@@ -202,6 +262,7 @@ class ParkingService : Service() {
         const val KEY_RUNNING = "running"
         const val KEY_INTERVAL_MINUTES = "interval_minutes"
         const val KEY_IS_PARKING_ACTIVE = "is_parking_active"
+        const val KEY_NEXT_TRIGGER_TIME = "next_trigger_time"
         const val ACTION_STOP = "ACTION_STOP"
 
         private fun smsManager(context: Context): SmsManager {
